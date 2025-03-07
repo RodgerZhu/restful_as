@@ -71,7 +71,7 @@ Urts_Library_Name := sgx_urts
 
 App_Cpp_Files := App/App.cpp
 ifeq ($(QVL_ONLY), 1)
-App_Include_Paths := -IApp
+App_Include_Paths := -IApp -Iinclude -Ijson/include
 else
 App_Include_Paths := -IApp -I$(SGX_SDK)/include
 endif
