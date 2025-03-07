@@ -13,6 +13,9 @@
 #include <stdexcept>
 #include <ctime>
 #include <openssl/ssl.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+
 #include "httplib.h"
 #include <nlohmann/json.hpp>
 
@@ -70,6 +73,30 @@ typedef union _supp_ver_t
         uint16_t minor_version;
     };
 } supp_ver_t;
+
+void print_hex(const std::vector<uint8_t>& data) {
+    for (uint8_t byte : data) {
+        printf("%02x ", byte);  // 两位十六进制，空格分隔
+    }
+    printf("\n");
+}
+
+std::vector<uint8_t> base64_decode(const std::string& encoded) {
+    BIO* b64 = BIO_new(BIO_f_base64());
+    BIO* mem = BIO_new_mem_buf(encoded.c_str(), encoded.length());
+    BIO_push(b64, mem);
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
+
+    std::vector<uint8_t> decoded(encoded.length());
+    int len = BIO_read(b64, decoded.data(), encoded.length());
+    if (len < 0) {
+        BIO_free_all(b64);
+        throw std::runtime_error("Base64 decoding failed");
+    }
+    decoded.resize(len);
+    BIO_free_all(b64);
+    return decoded;
+}
 
 vector<uint8_t> readBinaryContent(const string &filePath)
 {
@@ -262,19 +289,23 @@ void usage()
 void handle_tdx_attestation(const Request& req, Response& res)
 {
    // int ret = 0;
-    vector<uint8_t> quote;
+    vector<uint8_t> raw_quote;
 #if defined(_MSC_VER)
     HINSTANCE qpl_library_handle = NULL;
 #endif
 
-    char quote_path[PATHSIZE] = "/root/quote.dat";
+    //char quote_path[PATHSIZE] = "/root/quote.dat";
 
     std::cout << "------> handle_tdx_attestation " << std::endl;
     try {
-       // auto json_data = json::parse(req.body);
-       // TdxQuote quote = json_data.get<TdxQuote>();
+        auto json_data = json::parse(req.body);
+        std::string base64_quote = json_data["raw_quote_data"];
+        raw_quote = base64_decode(base64_quote);
 
-       // bool is_valid = validator.validate(quote);
+        std::cout << "------> Start to Print raw Quote     " << std::endl;
+        print_hex(raw_quote);
+        std::cout << "------> End                      " << std::endl;
+        //bool is_valid = validator.validate(quote);
         bool is_valid=1;
         json response = {
             {"attestation_result", is_valid ? "SUCCESS" : "FAILED"},
@@ -292,7 +323,7 @@ void handle_tdx_attestation(const Request& req, Response& res)
         res.status = 500;
         res.set_content(json{{"error", "TDX_VALIDATION_ERROR"}, {"message", e.what()}}.dump(), "application/json");
     }
-
+#if 0
     if (*quote_path == '\0')
     {
         strncpy(quote_path, DEFAULT_QUOTE, PATHSIZE - 1);
@@ -301,6 +332,11 @@ void handle_tdx_attestation(const Request& req, Response& res)
     // read quote from file
     //
     quote = readBinaryContent(quote_path);
+    
+    //std::cout << "------> Start to Print Quote     " << std::endl;
+    //print_hex(quote);
+    //std::cout << "------> End                      " << std::endl;
+
     if (quote.empty())
     {
         std::cout << "------> No Quote Data Received!  " << std::endl;
@@ -308,16 +344,16 @@ void handle_tdx_attestation(const Request& req, Response& res)
        // return -1;
     }
 
-
+#endif
     log("Info: ECDSA quote path: %s", quote_path);
 
-    // Trusted quote verification, ignore error checking
 
-    // Unrusted quote verification, ignore error checking
     log("Untrusted quote verification:");
-    if (ecdsa_quote_verification(quote, false) != 0)
+    if (ecdsa_quote_verification(raw_quote, false) != 0)
     {
-        std::cout << "------> Untrusted Quote verification fail " << std::endl;
+        std::cout << "------> TDX Quote Verification Pass! " << std::endl;
+    }else {
+        std::cout << "------> TDX Quote Verification Fail! " << std::endl;
     }
 
     //return ret;

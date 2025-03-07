@@ -96,7 +96,7 @@ endif
 
 App_Cpp_Flags := $(App_C_Flags)
 ifeq ($(QVL_ONLY), 1)
-App_Link_Flags := -L$(SGX_LIBRARY_PATH) -lsgx_dcap_quoteverify -lpthread -ldl
+App_Link_Flags := -L$(SGX_LIBRARY_PATH) -lsgx_dcap_quoteverify -lpthread -ldl -lssl -lcrypto
 else
 App_Link_Flags := -L$(SGX_LIBRARY_PATH) -lsgx_dcap_quoteverify -l$(Urts_Library_Name) -lpthread -ldl
 endif
