@@ -293,7 +293,13 @@ void handle_tdx_attestation(const Request& req, Response& res)
         };
 
         std::cout << "---------> Fill response with attest result  " << std::endl;
+	res.set_header("Access-Control-Allow-Origin", "*");
+        res.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+        res.set_header("Access-Control-Allow-Headers", "Content-Type");
+        res.set_header("Access-Control-Max-Age", "86400");
         res.set_content(response.dump(), "application/json");
+
+        std::cout << "---------> This Session End <----------" << std::endl;
 
     } catch (const json::exception& e) {
         res.status = 400;
@@ -309,10 +315,20 @@ int main()
 {
     httplib::Server svr;
     //SSLServer svr;
+    svr.Options("/tdx_attest", [](const httplib::Request &req, httplib::Response &res) {
+
+    res.set_header("Access-Control-Allow-Origin", "*"); 
+    res.set_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    res.set_header("Access-Control-Allow-Headers", "Content-Type");
+    res.set_header("Access-Control-Max-Age", "86400"); 
+    res.status = 200; 
+    });
+
     svr.Post("/tdx_attest", handle_tdx_attestation);
+    
     svr.set_read_timeout(10);
     svr.set_write_timeout(10);
 
     std::cout << "Starting TDX Attestation Service on port 8443..." << std::endl;
-    svr.listen("localhost", 8443);
+    svr.listen("0.0.0.0", 8443);
 }
