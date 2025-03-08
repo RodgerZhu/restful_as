@@ -19,29 +19,6 @@
 #include "httplib.h"
 #include <nlohmann/json.hpp>
 
-#if SGX_QPL_LOGGING
-#include "sgx_default_quote_provider.h"
-#ifdef _MSC_VER
-typedef quote3_error_t(*sgx_ql_set_logging_callback_t)(sgx_ql_logging_callback_t, sgx_ql_log_level_t);
-#endif
-#endif
-
-#ifndef _MSC_VER
-
-#define SAMPLE_ISV_ENCLAVE "enclave.signed.so"
-#define DEFAULT_QUOTE "../QuoteGenerationSample/quote.dat"
-
-#else
-
-#define SAMPLE_ISV_ENCLAVE "enclave.signed.dll"
-#define DEFAULT_QUOTE "..\\..\\..\\QuoteGenerationSample\\x64\\Debug\\quote.dat"
-#define QPL_LIB_NAME "dcap_quoteprov.dll"
-#define strncpy strncpy_s
-#endif
-#ifndef SGX_CDECL
-#define SGX_CDECL
-#endif
-
 using namespace httplib;
 using namespace std;
 
@@ -124,8 +101,7 @@ vector<uint8_t> readBinaryContent(const string &filePath)
  *                   If true, quote verification will be performed by Intel QvE
  *                   If false, quote verification will be performed by untrusted QVL
  */
-
-int ecdsa_quote_verification(vector<uint8_t> quote, bool use_qve)
+int handle_quote_verification(vector<uint8_t> quote, bool use_qve)
 {
     (void)use_qve;
 
@@ -273,47 +249,50 @@ cleanup:
         free(supp_data.p_data);
     }
 
-
     return ret;
 }
 
-void usage()
-{
-    log("Usage:");
-    log("\tPlease specify quote path, e.g. \"./app -quote <path/to/quote>\"");
-    log("\t\tDefault quote path is %s when no command line args", DEFAULT_QUOTE);
-}
-
-
-/* Application entry */
+/**
+ * @param Request - remote request message
+ * @param Response - response message
+ *                   If TDX Quote verified pass, send SUCCESS;
+ *                   If TDX Quote verified pass, send FAILED;
+ */
 void handle_tdx_attestation(const Request& req, Response& res)
 {
-   // int ret = 0;
     vector<uint8_t> raw_quote;
-#if defined(_MSC_VER)
-    HINSTANCE qpl_library_handle = NULL;
-#endif
 
-    //char quote_path[PATHSIZE] = "/root/quote.dat";
-
-    std::cout << "------> handle_tdx_attestation " << std::endl;
+    std::cout << "------> Handle_tdx_attestation " << std::endl;
     try {
+        // Parse request message
+        // if Quote data read in base64 mode, decode it. 
         auto json_data = json::parse(req.body);
         std::string base64_quote = json_data["raw_quote_data"];
         raw_quote = base64_decode(base64_quote);
+        bool is_valid=0;
 
-        std::cout << "------> Start to Print raw Quote     " << std::endl;
+        std::cout << "---------> Start to Print raw Quote     " << std::endl;
         print_hex(raw_quote);
-        std::cout << "------> End                      " << std::endl;
-        //bool is_valid = validator.validate(quote);
-        bool is_valid=1;
+        std::cout << "---------> End                      " << std::endl;
+ 
+        // Call Quote Verification API         
+        log("Quote verification:");
+        if (handle_quote_verification(raw_quote, false) != 0)
+        {
+            std::cout << "---------> TDX Quote Verification Pass! " << std::endl;
+            is_valid = 1;
+        }else {
+            std::cout << "---------> TDX Quote Verification Fail! " << std::endl;
+            is_valid = 0;
+        }
+        
+        // Response data format
         json response = {
             {"attestation_result", is_valid ? "SUCCESS" : "FAILED"},
-            {"trust_level", is_valid ? 3 : 0},
             {"timestamp", static_cast<uint32_t>(time(nullptr))}
         };
 
-        std::cout << "------> fill response with attest result  " << std::endl;
+        std::cout << "---------> Fill response with attest result  " << std::endl;
         res.set_content(response.dump(), "application/json");
 
     } catch (const json::exception& e) {
@@ -323,43 +302,10 @@ void handle_tdx_attestation(const Request& req, Response& res)
         res.status = 500;
         res.set_content(json{{"error", "TDX_VALIDATION_ERROR"}, {"message", e.what()}}.dump(), "application/json");
     }
-#if 0
-    if (*quote_path == '\0')
-    {
-        strncpy(quote_path, DEFAULT_QUOTE, PATHSIZE - 1);
-    }
 
-    // read quote from file
-    //
-    quote = readBinaryContent(quote_path);
-    
-    //std::cout << "------> Start to Print Quote     " << std::endl;
-    //print_hex(quote);
-    //std::cout << "------> End                      " << std::endl;
-
-    if (quote.empty())
-    {
-        std::cout << "------> No Quote Data Received!  " << std::endl;
-       // usage();
-       // return -1;
-    }
-
-#endif
-    log("Info: ECDSA quote path: %s", quote_path);
-
-
-    log("Untrusted quote verification:");
-    if (ecdsa_quote_verification(raw_quote, false) != 0)
-    {
-        std::cout << "------> TDX Quote Verification Pass! " << std::endl;
-    }else {
-        std::cout << "------> TDX Quote Verification Fail! " << std::endl;
-    }
-
-    //return ret;
 }
 
-int SGX_CDECL main()
+int main()
 {
     httplib::Server svr;
     //SSLServer svr;
