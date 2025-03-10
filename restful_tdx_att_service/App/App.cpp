@@ -252,6 +252,28 @@ cleanup:
     return ret;
 }
 
+std::vector<uint8_t> hex_string_to_bytes(const std::string& hex_str) {
+    std::vector<uint8_t> bytes;
+    std::istringstream iss(hex_str);
+    std::string byte_str;
+
+    while (iss >> byte_str) {
+        if (byte_str.length() != 2) {
+            throw std::invalid_argument("Invalid hex byte format: " + byte_str);
+        }
+
+        try {
+            auto byte = static_cast<uint8_t>(std::stoul(byte_str, nullptr, 16));
+            bytes.push_back(byte);
+        } catch (...) {
+            throw std::invalid_argument("Conversion failed for: " + byte_str);
+        }
+    }
+
+    return bytes;
+}
+
+
 /**
  * @param Request - remote request message
  * @param Response - response message
@@ -263,17 +285,20 @@ void handle_tdx_attestation(const Request& req, Response& res)
     vector<uint8_t> raw_quote;
 
     std::cout << "------> Handle_tdx_attestation " << std::endl;
+    std::cout << "---------> This Session Start <----------" << std::endl;
     try {
         // Parse request message
         // if Quote data read in base64 mode, decode it. 
         auto json_data = json::parse(req.body);
         std::string base64_quote = json_data["raw_quote_data"];
-        raw_quote = base64_decode(base64_quote);
+        //std::cout << "---------> raw_quote_data:" << base64_quote << std::endl;
+        //raw_quote = base64_decode(base64_quote);
+        raw_quote = hex_string_to_bytes(base64_quote);
+        //std::cout << "---------> raw_quote_data:" << raw_quote << std::endl
         bool is_valid=0;
-
-        std::cout << "---------> Start to Print raw Quote     " << std::endl;
-        print_hex(raw_quote);
-        std::cout << "---------> End                      " << std::endl;
+        //std::cout << "---------> Start to Print raw Quote     " << std::endl;
+        //print_hex(raw_quote);
+        //std::cout << "---------> End                      " << std::endl;
  
         // Call Quote Verification API         
         log("Quote verification:");

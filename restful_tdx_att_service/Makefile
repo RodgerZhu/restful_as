@@ -116,7 +116,7 @@ App_Cpp_Flags += -DSGX_QPL_LOGGING=$(SGX_QPL_LOGGING)
 
 App_Cpp_Objects := $(App_Cpp_Files:.cpp=.o)
 
-App_Name := app
+App_Name := attest_service
 
 ######## Enclave Settings ########
 
